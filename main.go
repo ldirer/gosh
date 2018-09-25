@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bufio"
+	"fmt"
 	"io/ioutil"
 	"log"
-	"fmt"
-	"math"
+	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 )
 
@@ -35,39 +37,41 @@ type GoshState struct {
 	currentDirectory string
 }
 
+var state = GoshState{currentDirectory: "./"}
+
 /**
 1. Read command.
 2. Parse it.
 3. Run it.
-
  */
 func gosh_loop() {
-	//currentDirectory := "./"
 	fmt.Println("IN LOOP")
-	arg := ""
 	fmt.Println("Gimme a command")
-	_, err := fmt.Scanf("%s", &arg)
+	for {
+		//_, err := fmt.Scanf("%s", &arg)
+		reader := bufio.NewReader(os.Stdin)
+		input, err := reader.ReadString('\n')
 
-	if err != nil {
-		log.Fatalln("Unexpected error getting command from stdin.")
-	}
+		if err != nil {
+			log.Fatalln("Unexpected error getting command from stdin.")
+		}
 
+		parsedArgs := parseCommand(input)
 
+		runErr := goshRun(parsedArgs)
+		if runErr != nil {
+			log.Printf("Error executing command %s", parsedArgs)
+			log.Fatalln(runErr)
+		}
 
-	parsedArgs, parseError := parseCommand(arg)
-	if parseError != nil {
-		panic(parseError)
-	}
-
-	runErr := goshRun(parsedArgs)
-	if runErr != nil {
-		log.Printf("Error executing command %s", parsedArgs)
-		log.Fatalln(runErr)
 	}
 
 }
 func goshRun(argv []string) error {
-	procAttr := syscall.ProcAttr{Dir:"./"}
+	procAttr := syscall.ProcAttr{
+		Dir: state.currentDirectory,
+		Files: []uintptr{os.Stdin.Fd(), os.Stdout.Fd(), os.Stderr.Fd()},
+	}
 	// ForkExec expects the full path to the executable.
 	binary, lookErr := exec.LookPath(argv[0])
 	if lookErr != nil {
@@ -81,48 +85,13 @@ func goshRun(argv []string) error {
 
 	fmt.Printf("Child process pid: %d\n", childPid)
 	return err
-
-
-	//if command == "ls" {
-	//	fileInfos, err := ioutil.ReadDir("./")
-	//	if err == nil {
-	//		for _, fileInfo := range fileInfos {
-	//			dirSuffix := ""
-	//			if fileInfo.IsDir() {
-	//				dirSuffix = "/"
-	//			}
-	//			fmt.Printf("%-10s %-15s\n", formatSize(fileInfo.Size()), fileInfo.Name() + dirSuffix)
-	//		}
-	//	} else {
-	//		return err
-	//	}
-	//}
-	//if command == "cd"  {
-	//
-	//}
-	//return fmt.Errorf("unknown command %s", command)
 }
-func parseCommand(s string) ([]string, error) {
+
+func parseCommand(s string) []string {
 	// First argument is the name of the program
 	argv := []string{s}
-	return argv, nil
+	argv = strings.Fields(s)
+	fmt.Println(argv)
+	return argv
 }
 
-func formatSize(nBytes int64) string {
-	//units := []string{"KB", "MB", "GB"}
-
-	kiloBytes := float64(nBytes) / math.Pow(2, 8)
-	megaBytes := float64(nBytes) / math.Pow(2, 16)
-	gigaBytes := float64(nBytes) / math.Pow(2, 24)
-
-	if gigaBytes >= 1 {
-		return fmt.Sprintf("%.2fGB", gigaBytes)
-	}
-	if megaBytes >= 1 {
-		return fmt.Sprintf("%.2fMB", megaBytes)
-	}
-	if kiloBytes >= 1 {
-		return fmt.Sprintf("%.2fKB", kiloBytes)
-	}
-	return fmt.Sprintf("%d", nBytes)
-}
