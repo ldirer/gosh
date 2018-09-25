@@ -1,0 +1,1 @@
+A basic shell proof of concept to play with Go.
